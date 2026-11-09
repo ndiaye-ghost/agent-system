@@ -35,33 +35,56 @@ def app(tmp_path, monkeypatch):
     return at
 
 
-def test_page_loads_in_demo_mode_with_checks(app):
-    assert any("Mode démo" in w.value for w in app.warning)
+def _go(at, page):
+    at.button(key=f"nav_{page}").click().run()
+    assert not at.exception, at.exception
+
+
+def test_home_is_chat_with_suggestions(app):
+    assert any("Comment puis-je vous aider" in m.value for m in app.markdown)
+    assert app.chat_input
+    assert any("Mode démonstration" in m.value for m in app.sidebar.markdown)
+
+
+def test_checks_page(app):
+    _go(app, "checks")
     assert [m.label for m in app.metric][:2] == ["Erreurs", "Avertissements"]
     assert app.metric[0].value == "9"
 
 
-def test_review_then_validate(app, tmp_path):
-    app.text_input(key="user").set_value("Testeur").run()
-    review_button = next(b for b in app.button if b.label == "Lancer la relecture")
-    review_button.click().run()
+def test_settings_then_review_then_validate(app, tmp_path):
+    _go(app, "settings")
+    next(t for t in app.text_input if t.label == "Votre nom").set_value("Testeur").run()
+    assert app.session_state["cfg"]["user"] == "Testeur"
+    _go(app, "review")
+    next(b for b in app.button if b.label == "Lancer la relecture").click().run()
     assert not app.exception, app.exception
-    validate = next(b for b in app.button if b.label == "✅ Valider")
-    validate.click().run()
+    next(b for b in app.button if b.label == "Valider").click().run()
     rows = read_journal(tmp_path / "journal_validations.csv")
     assert rows and rows[0]["utilisateur"] == "Testeur" and rows[0]["decision"] == ACCEPTED
 
 
-def test_agent_chat_keeps_history(app):
+def test_chat_conversation_and_history(app):
     app.chat_input[0].set_value("État des lieux ?").run()
     app.chat_input[0].set_value("Que dit notre guide sur les exigences temporelles ?").run()
     assert not app.exception, app.exception
-    texts = [m.markdown[-1].value for m in app.chat_message if m.markdown]
-    assert len(texts) == 4  # 2 questions + 2 answers kept
+    texts = [m.markdown[0].value for m in app.chat_message if m.markdown]
+    assert len(texts) == 4  # 2 questions + 2 answers
     assert "guide_redaction_exigences.docx" in texts[-1]
+    assert len(app.session_state["convs"]) == 1
+    app.button(key="nav_new").click().run()  # new conversation: back to the welcome screen
+    assert any("Comment puis-je vous aider" in m.value for m in app.markdown)
+    app.button(key="sugg_0").click().run()
+    assert len(app.session_state["convs"]) == 2
 
 
 def test_document_search(app):
-    search = next(t for t in app.text_input if t.label == "Rechercher dans les documents")
-    search.set_value("watchdog démarrage").run()
+    _go(app, "docs")
+    next(t for t in app.text_input if t.label == "Rechercher dans les documents").set_value("watchdog démarrage").run()
     assert any("retours_experience.md" in m.value for m in app.markdown)
+
+
+def test_agent_prompt_allows_general_questions():
+    from safety_agent.prompts import AGENT_SYSTEM
+
+    assert "Connaissances générales (à vérifier)" in AGENT_SYSTEM

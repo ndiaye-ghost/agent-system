@@ -71,7 +71,8 @@ def cmd_web(args) -> int:
            "--server.address", address, "--server.port", str(args.port),
            "--server.headless", "true" if args.partage else "false",
            "--browser.gatherUsageStats", "false",  # no telemetry sent outside the company
-           "--client.toolbarMode", "minimal"]  # hides the "Deploy" (publish to cloud) button
+           "--client.toolbarMode", "minimal",  # hides the "Deploy" (publish to cloud) button
+           "--theme.base", "light", "--theme.primaryColor", "#2b2d31"]
     if args.partage:
         import socket
 

@@ -54,9 +54,11 @@ Assistant IA pour la sûreté de fonctionnement automobile (**ISO 26262**) : con
 
 ## Page web
 
-Une page dans le navigateur pour utiliser l'outil sans VS Code : contrôles, relecture IA, modes de défaillance, discussion avec l'agent, recherche documentaire, et boutons **Valider / Rejeter** pour chaque proposition de l'IA.
+Une page de discussion dans le navigateur, pour utiliser l'outil sans VS Code. La conversation avec l'assistant est au centre, avec l'historique des conversations à gauche. Les outils sont dans la barre latérale : contrôles automatiques, relecture des exigences, modes de défaillance, propositions (boutons **Valider / Rejeter**), documents et paramètres.
 
-**Sur votre PC** : double-cliquez sur `lancer_page_web.bat`. La page s'ouvre dans le navigateur. Gardez la fenêtre noire ouverte : la fermer arrête la page.
+L'assistant répond aux questions sur vos données et vos documents (avec les sources) et aux questions générales de sûreté de fonctionnement. Il sépare toujours ce qui vient de vos sources de ses connaissances générales, marquées « à vérifier ».
+
+**Sur votre PC** : dans le terminal de VS Code, `.venv\Scripts\python.exe -m safety_agent web`, ou double-cliquez sur `lancer_page_web.bat` depuis l'Explorateur de fichiers. La page s'ouvre dans le navigateur. Gardez la fenêtre noire ouverte : la fermer arrête la page.
 
 **Pour les collègues** : double-cliquez sur `lancer_page_web_partagee.bat`. La fenêtre affiche l'adresse à leur donner, par exemple `http://NOM-DU-PC:8501`. Ils l'ouvrent dans leur navigateur, **sans rien installer**.
 
