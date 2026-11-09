@@ -15,6 +15,7 @@ from .checks.fmea import row_ap, traceability_matrix
 from .llm import LLMClient
 from .models import FmeaRow, Project, Proposal, Requirement
 from . import prompts
+from .knowledge import KnowledgeBase
 
 
 def _req_dict(r: Requirement) -> dict:
@@ -57,10 +58,20 @@ TOOLS = [
 ]
 
 
+SEARCH_TOOL = _fn(
+    "search_knowledge",
+    "Recherche dans la base documentaire de l'entreprise (procédures, guides, AMDEC passées, retours d'expérience). "
+    "Renvoie des extraits avec leur source.",
+    {"query": {"type": "string", "description": "Mots-clés ou question"}}, ["query"])
+
+
 class SafetyAgent:
-    def __init__(self, llm: LLMClient, project: Project, max_steps: int = 12, on_tool: Callable | None = None):
+    def __init__(self, llm: LLMClient, project: Project, max_steps: int = 12, on_tool: Callable | None = None,
+                 kb: KnowledgeBase | None = None):
         self.llm = llm
         self.project = project
+        self.kb = kb
+        self.tools = TOOLS + ([SEARCH_TOOL] if kb else [])
         self.max_steps = max_steps
         self.on_tool = on_tool
         self.proposals: list[Proposal] = []
@@ -95,6 +106,9 @@ class SafetyAgent:
                                                           for i in f.requirement_ids if i in p.requirements]}
         if name == "traceability_matrix":
             return traceability_matrix(p)
+        if name == "search_knowledge" and self.kb:
+            hits = self.kb.search(args.get("query", ""), k=5, llm=self.llm)
+            return [{"source": c.citation(), "extrait": c.text} for c in hits] or {"resultat": "aucun extrait trouvé"}
         if name == "record_proposal":
             prop = Proposal(args.get("kind", "autre"), args.get("target", ""), args.get("content", ""),
                             args.get("rationale", ""))
@@ -106,7 +120,7 @@ class SafetyAgent:
     def ask(self, question: str) -> str:
         self.messages.append({"role": "user", "content": question})
         for _ in range(self.max_steps):
-            msg = self.llm.chat(self.messages, tools=TOOLS)
+            msg = self.llm.chat(self.messages, tools=self.tools)
             calls = msg.get("tool_calls") or []
             self.messages.append({"role": "assistant", "content": msg.get("content") or "",
                                   **({"tool_calls": calls} if calls else {})})

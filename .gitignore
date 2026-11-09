@@ -8,3 +8,4 @@ propositions_amdec.csv
 .ipynb_checkpoints/
 .venv/
 *.zip
+base_documentaire.json

@@ -48,6 +48,7 @@ Assistant IA pour la sûreté de fonctionnement automobile (**ISO 26262**) : con
 | `02_relecture_exigences_ia.ipynb` | Relecture des exigences selon l'ISO 26262-8 §6 | Oui |
 | `03_suggestion_modes_defaillance.ipynb` | Propositions de modes de défaillance, export CSV | Oui |
 | `04_agent_conversationnel.ipynb` | Questions libres à l'agent | Oui |
+| `05_base_documentaire.ipynb` | Base documentaire : vos procédures, guides et AMDEC passées donnés à l'IA | Oui |
 
 **Sans serveur de modèle**, les notebooks 02 à 04 passent automatiquement en **mode démo** : réponses simulées, clairement marquées `[DÉMO]`, pour découvrir le fonctionnement. Pour de vraies analyses, installez Ollama (voir plus bas).
 
@@ -105,6 +106,31 @@ safety-agent chat --reqs examples/bms_exigences.csv --fmea examples/bms_amdec.cs
 
 En intégration continue, `check --fail-on error` renvoie le code 1 s'il y a des erreurs.
 
+## Base documentaire de l'entreprise (RAG)
+
+L'IA ne connaît pas vos procédures internes. La base documentaire les lui fournit : vos documents sont découpés en extraits, les plus pertinents sont retrouvés à chaque question et envoyés au modèle, qui cite ses sources. **Le modèle n'est pas réentraîné** : il suffit d'ajouter des documents pour enrichir la base.
+
+Formats acceptés : PDF, Word (.docx), Excel, CSV, Markdown, texte.
+
+```bash
+safety-agent index chemin/vers/mes_documents --out base_documentaire.json
+```
+
+```bash
+safety-agent search "dérive capteur de courant" --kb base_documentaire.json
+```
+
+```bash
+safety-agent review --reqs exigences.csv --kb base_documentaire.json
+```
+
+L'option `--kb` fonctionne aussi avec `suggest` et `chat`. Pour une recherche sémantique (synonymes, paraphrases), installez un modèle d'embeddings (`ollama pull bge-m3`) et ajoutez `--embed-model bge-m3` à la commande `index`.
+
+Bonnes pratiques :
+- n'indexez que des documents **validés et à jour** : l'IA reprendra ce qu'elle y trouve ;
+- la base enregistre l'empreinte SHA-256 de chaque document, ce qui permet de savoir exactement quelle version a servi ;
+- les documents de `examples/documents/` sont fictifs.
+
 ## Format des fichiers
 
 CSV (séparateur `,` ou `;`) ou Excel. Les en-têtes sont reconnus en français ou en anglais, sans tenir compte des accents ni des majuscules.
@@ -140,6 +166,7 @@ safety_agent/
   cli.py            Ligne de commande
   notebook.py       Tableaux pandas et choix du modèle pour les notebooks
   demo.py           Faux modèle (réponses simulées) pour le mode démo
+  knowledge.py      Base documentaire : lecture PDF/Word/Excel, découpage, recherche
 notebooks/          Notebooks Jupyter 00 à 04
 ```
 
@@ -156,7 +183,7 @@ pytest
 ## Pistes d'évolution
 
 - Import ReqIF (DOORS, Polarion) et export vers votre outil AMDEC (APIS IQ, Medini…).
-- Base documentaire (RAG) sur vos procédures internes et vos AMDEC passées.
+- Enregistrer les validations et rejets des propositions pour mesurer la qualité et préparer un éventuel fine-tuning.
 - Analyse FMEDA (métriques SPFM / LFM / PMHF) et arbres de défaillance.
 - Interface web pour valider ou rejeter les propositions une par une.
 - Jeu d'évaluation interne pour mesurer la qualité de chaque modèle sur vos données.

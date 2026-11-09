@@ -69,6 +69,23 @@ class LLMClient:
         self._audit(payload, message)
         return message
 
+    def embed(self, texts: list[str], model: str) -> list[list[float]]:
+        """Embedding vectors via the OpenAI-compatible /embeddings endpoint (Ollama, vLLM, TEI...)."""
+        req = urllib.request.Request(
+            self.config.base_url.rstrip("/") + "/embeddings",
+            data=json.dumps({"model": model, "input": texts}).encode(),
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {self.config.api_key}"},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=self.config.timeout) as resp:
+                body = json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            raise LLMError(f"Embeddings : le serveur a répondu {e.code} ({e.read().decode(errors='replace')[:300]}). "
+                           f"Le modèle '{model}' est-il installé ?") from e
+        except urllib.error.URLError as e:
+            raise LLMError(f"Serveur LLM injoignable à {self.config.base_url} ({e.reason})") from e
+        return [d["embedding"] for d in sorted(body["data"], key=lambda d: d.get("index", 0))]
+
     def ping(self) -> list[str]:
         """Return the model names served at base_url. Raises LLMError if the server is unreachable."""
         req = urllib.request.Request(self.config.base_url.rstrip("/") + "/models",

@@ -30,6 +30,38 @@ def _write(text: str, out: str | None) -> None:
         print(text)
 
 
+def _kb(args):
+    if not getattr(args, "kb", None):
+        return None
+    from .knowledge import KnowledgeBase
+
+    kb = KnowledgeBase.load(args.kb)
+    print(f"Base documentaire : {len(kb.chunks)} extraits de {len(kb.documents)} document(s)", file=sys.stderr)
+    return kb
+
+
+def cmd_index(args) -> int:
+    from .knowledge import KnowledgeBase
+
+    llm = _llm(args) if args.embed_model else None
+    kb = KnowledgeBase.build(args.docs, llm=llm, embed_model=args.embed_model,
+                             on_progress=lambda name: print(f"  lecture {name}", file=sys.stderr))
+    kb.save(args.out)
+    for d in kb.documents:
+        status = f"ERREUR : {d['error']}" if "error" in d else f"{d['chunks']} extrait(s)"
+        print(f"  {d['path']} : {status}", file=sys.stderr)
+    print(f"Base écrite : {args.out} ({len(kb.chunks)} extraits)", file=sys.stderr)
+    return 0
+
+
+def cmd_search(args) -> int:
+    kb = _kb(args)
+    llm = _llm(args) if kb.embed_model else None
+    for n, c in enumerate(kb.search(args.query, k=args.k, llm=llm), 1):
+        print(f"[{n}] {c.citation()}\n    {c.text[:400]}\n")
+    return 0
+
+
 def cmd_check(args) -> int:
     project, findings = load_project(args.reqs, args.fmea)
     findings += run_all_checks(project)
@@ -58,7 +90,8 @@ def cmd_review(args) -> int:
         print(f"Exigence(s) inconnue(s) : {', '.join(unknown)}", file=sys.stderr)
         return 2
     ai_findings, proposals = review_requirements(
-        _llm(args), project, ids, on_progress=lambda n, t, rid: print(f"[{n}/{t}] relecture {rid}...", file=sys.stderr))
+        _llm(args), project, ids, on_progress=lambda n, t, rid: print(f"[{n}/{t}] relecture {rid}...", file=sys.stderr),
+        kb=_kb(args))
     _write(markdown_report(project, findings + ai_findings, proposals, "Relecture des exigences de sécurité"), args.out)
     return 0
 
@@ -67,7 +100,8 @@ def cmd_suggest(args) -> int:
     from .ai import suggest_failure_modes
 
     project, _ = load_project(args.reqs, args.fmea)
-    proposals = suggest_failure_modes(_llm(args), project, args.item, args.function or "", args.context or "")
+    proposals = suggest_failure_modes(_llm(args), project, args.item, args.function or "", args.context or "",
+                                      kb=_kb(args))
     if args.csv:
         write_proposals_csv(proposals, args.csv)
         print(f"{len(proposals)} proposition(s) écrite(s) dans {args.csv}", file=sys.stderr)
@@ -80,7 +114,8 @@ def cmd_chat(args) -> int:
     from .agent import SafetyAgent
 
     project, _ = load_project(args.reqs, args.fmea)
-    agent = SafetyAgent(_llm(args), project, on_tool=lambda n, a: print(f"  · outil {n} {a or ''}", file=sys.stderr))
+    agent = SafetyAgent(_llm(args), project, on_tool=lambda n, a: print(f"  · outil {n} {a or ''}", file=sys.stderr),
+                        kb=_kb(args))
     questions = [args.question] if args.question else None
     if not questions:
         print("Agent sûreté prêt. Posez vos questions (ligne vide ou Ctrl-D pour quitter).", file=sys.stderr)
@@ -113,6 +148,7 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--fmea", help="Fichier AMDEC (.csv ou .xlsx)")
         p.add_argument("--out", help="Fichier de sortie (Markdown)")
         if llm:
+            p.add_argument("--kb", help="Base documentaire créée avec la commande 'index' (.json)")
             p.add_argument("--base-url", help="URL du serveur LLM (défaut : $SAFETY_AGENT_BASE_URL ou Ollama local)")
             p.add_argument("--model", help="Nom du modèle (défaut : $SAFETY_AGENT_MODEL ou qwen2.5:14b)")
 
@@ -141,8 +177,25 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--question", "-q", help="Question unique (sinon mode interactif)")
     p.set_defaults(func=cmd_chat)
 
+    p = sub.add_parser("index", help="Créer la base documentaire (procédures, AMDEC passées, REX)")
+    p.add_argument("docs", nargs="+", help="Dossiers ou fichiers (.pdf .docx .xlsx .csv .md .txt)")
+    p.add_argument("--out", default="base_documentaire.json", help="Fichier de sortie")
+    p.add_argument("--embed-model", help="Modèle d'embeddings pour la recherche sémantique (ex. bge-m3). "
+                                         "Sans cette option : recherche par mots-clés uniquement")
+    p.add_argument("--base-url", help="URL du serveur LLM")
+    p.add_argument("--model", help=argparse.SUPPRESS)
+    p.set_defaults(func=cmd_index)
+
+    p = sub.add_parser("search", help="Chercher dans la base documentaire")
+    p.add_argument("query", help="Question ou mots-clés")
+    p.add_argument("--kb", default="base_documentaire.json")
+    p.add_argument("-k", type=int, default=5, help="Nombre d'extraits")
+    p.add_argument("--base-url", help="URL du serveur LLM")
+    p.add_argument("--model", help=argparse.SUPPRESS)
+    p.set_defaults(func=cmd_search)
+
     args = parser.parse_args(argv)
-    if not (args.reqs or args.fmea):
+    if args.command not in {"index", "search"} and not (args.reqs or args.fmea):
         parser.error("indiquez au moins --reqs ou --fmea")
     try:
         return args.func(args)

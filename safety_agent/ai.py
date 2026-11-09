@@ -8,6 +8,9 @@ from __future__ import annotations
 from .llm import LLMClient, LLMError, extract_json
 from .models import Finding, Level, Project, Proposal, Requirement
 from . import prompts
+from .knowledge import KnowledgeBase, format_context
+
+NO_KB = "Aucune base documentaire fournie."
 
 # criterion -> (finding code, label)
 CRITERIA_LABELS = {
@@ -21,13 +24,16 @@ CRITERIA_LABELS = {
 }
 
 
-def review_requirement(llm: LLMClient, project: Project, req: Requirement) -> tuple[list[Finding], list[Proposal]]:
+def review_requirement(llm: LLMClient, project: Project, req: Requirement,
+                       kb: KnowledgeBase | None = None) -> tuple[list[Finding], list[Proposal]]:
     parents = "; ".join(
         f"{p.id} [{p.asil_raw}] {p.text}" for pid in req.parent_ids if (p := project.requirements.get(pid))
     ) or "aucune"
+    sources = kb.search(f"{req.text} {parents}", k=4, llm=llm) if kb else []
     user = prompts.REVIEW_USER.format(
         id=req.id, level=req.level or "?", asil=req.asil_raw or "ASIL ?", text=req.text,
         parents=parents, verification=req.verification or "non renseignée",
+        knowledge=format_context(sources) if kb else NO_KB,
     )
     answer = llm.chat(
         [{"role": "system", "content": prompts.REVIEW_SYSTEM}, {"role": "user", "content": user}], json_mode=True
@@ -42,18 +48,24 @@ def review_requirement(llm: LLMClient, project: Project, req: Requirement) -> tu
     proposals = []
     reformulation = (data.get("reformulation") or "").strip()
     if reformulation and reformulation != req.text:
-        proposals.append(Proposal("reformulation", req.id, reformulation, (data.get("justification") or "").strip()))
+        proposals.append(Proposal("reformulation", req.id, reformulation, (data.get("justification") or "").strip(),
+                                  data={"sources": _sources(sources)}))
     return findings, proposals
 
 
-def review_requirements(llm: LLMClient, project: Project, ids: list[str] | None = None, on_progress=None):
+def _sources(chunks) -> list[str]:
+    return [f"[{n}] {c.citation()}" for n, c in enumerate(chunks, 1)]
+
+
+def review_requirements(llm: LLMClient, project: Project, ids: list[str] | None = None, on_progress=None,
+                        kb: KnowledgeBase | None = None):
     findings, proposals = [], []
     targets = [project.requirements[i] for i in ids] if ids else list(project.requirements.values())
     for n, req in enumerate(targets, 1):
         if on_progress:
             on_progress(n, len(targets), req.id)
         try:
-            f, p = review_requirement(llm, project, req)
+            f, p = review_requirement(llm, project, req, kb)
         except LLMError as e:
             f, p = [Finding("IA-ERR", Level.INFO, req.id, f"Relecture IA impossible : {e}", source="IA")], []
         findings += f
@@ -61,14 +73,17 @@ def review_requirements(llm: LLMClient, project: Project, ids: list[str] | None 
     return findings, proposals
 
 
-def suggest_failure_modes(llm: LLMClient, project: Project, item: str, function: str, context: str = "") -> list[Proposal]:
+def suggest_failure_modes(llm: LLMClient, project: Project, item: str, function: str, context: str = "",
+                          kb: KnowledgeBase | None = None) -> list[Proposal]:
     existing = [
         f"- {r.failure_mode}" for r in project.fmea.values()
         if item.lower() in r.item.lower() or (function and function.lower() in r.function.lower())
     ]
+    sources = kb.search(f"{item} {function} mode de défaillance {context}", k=6, llm=llm) if kb else []
     user = prompts.SUGGEST_USER.format(
         item=item, function=function or "non précisée", context=context or "non précisé",
         existing="\n".join(existing) or "aucun",
+        knowledge=format_context(sources) if kb else NO_KB,
     )
     answer = llm.chat(
         [{"role": "system", "content": prompts.SUGGEST_SYSTEM}, {"role": "user", "content": user}], json_mode=True
@@ -85,5 +100,6 @@ def suggest_failure_modes(llm: LLMClient, project: Project, item: str, function:
             f"Prévention : {m.get('prevention', '')} | Détection : {m.get('detection', '')}"
         )
         target = f"{item} / {function}" if function else item
-        out.append(Proposal("mode_de_defaillance", target, content, m.get("justification", ""), data=m))
+        out.append(Proposal("mode_de_defaillance", target, content, m.get("justification", ""),
+                            data={**m, "sources": _sources(sources)}))
     return out
