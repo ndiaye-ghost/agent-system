@@ -1,0 +1,12 @@
+ID;Niveau;ASIL;Texte;Parent;Méthode de vérification;Statut
+SG-01;SG;ASIL C;Le système doit empêcher la surcharge des cellules pouvant conduire à un emballement thermique.;;;Validé
+SG-02;SG;ASIL B;Le système doit empêcher l'ouverture intempestive des contacteurs principaux en roulage.;;;Validé
+FSR-01;FSR;ASIL C;Le BMS doit mesurer la tension de chaque cellule avec une précision de ±5 mV.;SG-01;Test;Validé
+FSR-02;FSR;ASIL C;Le BMS doit ouvrir les contacteurs principaux dans un délai de 100 ms lorsqu'une tension cellule dépasse 4,25 V.;SG-01;Test HIL;Validé
+FSR-03;FSR;ASIL B(C);Le microcontrôleur principal doit détecter une surtension cellule supérieure à 4,25 V.;SG-01;Test;En revue
+FSR-04;FSR;ASIL A(C);Un circuit de surveillance analogique indépendant doit détecter une surtension cellule supérieure à 4,30 V.;SG-01;Test;En revue
+FSR-05;FSR;ASIL A;Le BMS doit maintenir les contacteurs fermés tant qu'aucun défaut critique n'est confirmé.;SG-02;Test;Brouillon
+FSR-06;FSR;ASIL B;Le BMS doit réagir rapidement et de manière appropriée en cas de défaut de communication CAN et doit enregistrer un code défaut.;SG-02;;Brouillon
+TSR-01;TSR;ASIL C;Le logiciel doit commander l'ouverture des contacteurs via deux sorties matérielles indépendantes.;FSR-02;Revue + test;En revue
+TSR-02;TSR;ASIL C;Le logiciel doit vérifier la cohérence des mesures de tension entre les deux chaînes d'acquisition.;FSR-99;Test;Brouillon
+SW-01;SSR;ASIL B;Le watchdog externe doit être rafraîchi toutes les 10 ms.;;Test;Brouillon

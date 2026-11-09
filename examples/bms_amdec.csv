@@ -1,0 +1,7 @@
+ID;Élément;Fonction;Mode de défaillance;Effet;Cause;S;O;D;Prévention;Mesures de détection;Actions;Exigences
+FM-01;Capteur tension cellule;Mesurer la tension cellule;Dérive de la mesure (sous-estimation);Surcharge non détectée, risque d'emballement thermique;Dérive de la référence de tension de l'ADC;10;4;5;Référence qualifiée AEC-Q100;Plausibilité inter-cellules;;FSR-01, FSR-03
+FM-02;Contacteur principal;Isoler la batterie;Contacteur collé fermé;Impossible d'isoler la batterie en cas de défaut;Soudure des contacts sous fort courant;9;3;4;Dimensionnement du contacteur;Diagnostic de soudure au démarrage;Évaluer un contacteur redondant;TSR-01
+FM-03;Contacteur principal;Maintenir l'alimentation de traction;Ouverture intempestive;Perte de propulsion en roulage;Perte d'alimentation de la bobine;8;4;6;Alimentation bobine protégée;Surveillance du courant bobine;;
+FM-04;Communication CAN;Transmettre l'état batterie au VCU;Perte de trame;Le VCU ne reçoit plus l'état de charge ni les alarmes;;9;5;3;Bus redondant;Timeout de réception 50 ms;;FSR-77
+FM-05;Watchdog externe;Superviser le microcontrôleur;Watchdog inactif;Blocage logiciel non détecté;Mauvaise configuration à l'initialisation;7;2;9;Revue de configuration;;Ajouter un test de démarrage du watchdog;SW-01
+FM-06;Capteur température;Mesurer la température cellule;Valeur figée;Surchauffe non détectée;Court-circuit du capteur NTC;10;;6;;Plausibilité entre capteurs;;

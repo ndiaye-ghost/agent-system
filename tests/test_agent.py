@@ -1,0 +1,81 @@
+import json
+from pathlib import Path
+
+from safety_agent.agent import SafetyAgent
+from safety_agent.ai import review_requirement, suggest_failure_modes
+from safety_agent.llm import extract_json
+from safety_agent.loaders import load_project
+
+EX = Path(__file__).parent.parent / "examples"
+
+
+class FakeLLM:
+    """Replays scripted assistant messages and records what it was sent."""
+
+    def __init__(self, replies):
+        self.replies = list(replies)
+        self.calls = []
+
+    def chat(self, messages, tools=None, json_mode=False):
+        self.calls.append({"messages": [dict(m) for m in messages], "tools": tools})
+        return self.replies.pop(0)
+
+
+def tool_call(name, args, cid="c1"):
+    return {"role": "assistant", "content": "", "tool_calls": [
+        {"id": cid, "type": "function", "function": {"name": name, "arguments": json.dumps(args)}}]}
+
+
+def project():
+    return load_project(EX / "bms_exigences.csv", EX / "bms_amdec.csv")[0]
+
+
+def test_agent_tool_loop_and_proposal():
+    llm = FakeLLM([
+        tool_call("list_fmea_rows", {"ap": "H"}),
+        tool_call("record_proposal", {"kind": "action", "target": "FM-01", "content": "Ajouter une 2e référence",
+                                      "rationale": "AP=H sans action"}, "c2"),
+        {"role": "assistant", "content": "FM-01 et FM-04 sont en priorité H."},
+    ])
+    agent = SafetyAgent(llm, project())
+    answer = agent.ask("Quelles lignes sont en priorité H ?")
+    assert "FM-01" in answer
+    tool_result = json.loads(llm.calls[1]["messages"][-1]["content"])
+    assert {r["id"] for r in tool_result} == {"FM-01", "FM-04"}
+    assert len(agent.proposals) == 1 and agent.proposals[0].status == "À VALIDER"
+
+
+def test_agent_unknown_ids_do_not_crash():
+    llm = FakeLLM([tool_call("get_requirement", {"id": "NOPE"}), {"role": "assistant", "content": "Inconnue."}])
+    SafetyAgent(llm, project()).ask("?")
+    assert "inconnue" in llm.calls[1]["messages"][-1]["content"]
+
+
+def test_agent_stops_after_max_steps():
+    llm = FakeLLM([tool_call("run_rule_checks", {})] * 3)
+    assert "maximal" in SafetyAgent(llm, project(), max_steps=3).ask("?")
+
+
+def test_review_requirement_parses_model_json():
+    p = project()
+    reply = {"content": "```json\n" + json.dumps({
+        "criteres": {"non_ambigue": {"ok": False, "commentaire": "« rapidement » non défini"},
+                     "verifiable": {"ok": True, "commentaire": ""}},
+        "reformulation": "Le BMS doit détecter une perte de communication CAN en moins de 50 ms.",
+        "justification": "Valeur chiffrée"}) + "\n```"}
+    findings, proposals = review_requirement(FakeLLM([reply]), p, p.requirements["FSR-06"])
+    assert [f.source for f in findings] == ["IA"]
+    assert proposals[0].kind == "reformulation"
+
+
+def test_suggest_failure_modes():
+    reply = {"content": json.dumps({"modes": [{"mode": "Mesure figée", "mot_guide": "fonction figée", "effet": "E",
+                                               "cause": "C", "S": 9, "O": 3, "D": 4}]})}
+    llm = FakeLLM([reply])
+    props = suggest_failure_modes(llm, project(), "Capteur tension", "Mesurer la tension cellule")
+    assert props[0].data["S"] == 9
+    assert "Dérive de la mesure" in llm.calls[0]["messages"][1]["content"]  # existing mode passed to the model
+
+
+def test_extract_json_with_prose():
+    assert extract_json('Voici : {"a": 1} merci') == {"a": 1}
