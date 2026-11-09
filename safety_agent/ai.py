@@ -5,6 +5,9 @@ because each call has one narrow job and a fixed JSON format.
 """
 from __future__ import annotations
 
+import unicodedata
+
+from .checks.requirements import check_requirements
 from .llm import LLMClient, LLMError, extract_json
 from .models import Finding, Level, Project, Proposal, Requirement
 from . import prompts
@@ -24,13 +27,58 @@ CRITERIA_LABELS = {
 }
 
 
+def _key(s: str) -> str:
+    s = unicodedata.normalize("NFKD", str(s)).encode("ascii", "ignore").decode().lower()
+    return "_".join(s.replace("-", " ").split())
+
+
+def _ok(value) -> bool | None:
+    """Accept true/false, "oui"/"non", "ok"/"ko"... as the model may answer either way."""
+    if isinstance(value, bool):
+        return value
+    v = _key(value) if isinstance(value, (str, int)) else ""
+    if v in {"true", "oui", "yes", "ok", "vrai", "1", "conforme", "respecte"}:
+        return True
+    if v in {"false", "non", "no", "ko", "faux", "0", "non_conforme", "non_respecte"}:
+        return False
+    return None
+
+
+def _criteria(data: dict) -> dict[str, dict]:
+    """Criteria dict with normalized keys, wherever the model put it."""
+    if not isinstance(data, dict):
+        return {}
+    normed = {_key(k): v for k, v in data.items()}
+    block = normed.get("criteres") or normed.get("criteria") or normed
+    if not isinstance(block, dict):
+        return {}
+    out = {}
+    for k, v in block.items():
+        k = _key(k)
+        if k == "ambigue":
+            k = "non_ambigue"
+        if isinstance(v, dict):
+            out[k] = {_key(kk): vv for kk, vv in v.items()}
+        elif isinstance(v, (bool, str)):
+            out[k] = {"ok": v, "commentaire": ""}
+    return out
+
+
+def _rule_findings(project: Project, req: Requirement) -> list[Finding]:
+    """Deterministic wording/attribute checks for this requirement only."""
+    scope = Project({req.id: req, **{p: project.requirements[p] for p in req.parent_ids if p in project.requirements}})
+    return [f for f in check_requirements(scope) if f.target == req.id and f.code not in {"REQ-012", "REQ-013"}]
+
+
 def review_requirement(llm: LLMClient, project: Project, req: Requirement,
                        kb: KnowledgeBase | None = None) -> tuple[list[Finding], list[Proposal]]:
     parents = "; ".join(
         f"{p.id} [{p.asil_raw}] {p.text}" for pid in req.parent_ids if (p := project.requirements.get(pid))
     ) or "aucune"
     sources = kb.search(f"{req.text} {parents}", k=4, llm=llm) if kb else []
+    rules = _rule_findings(project, req)
     user = prompts.REVIEW_USER.format(
+        rule_findings="\n".join(f"- {f.message}" for f in rules) or "- aucun problème détecté",
         id=req.id, level=req.level or "?", asil=req.asil_raw or "ASIL ?", text=req.text,
         parents=parents, verification=req.verification or "non renseignée",
         knowledge=format_context(sources) if kb else NO_KB,
@@ -39,12 +87,28 @@ def review_requirement(llm: LLMClient, project: Project, req: Requirement,
         [{"role": "system", "content": prompts.REVIEW_SYSTEM}, {"role": "user", "content": user}], json_mode=True
     )
     data = extract_json(answer.get("content", ""))
+    criteria = _criteria(data)
     findings: list[Finding] = []
+    answered = 0
     for key, (code, label) in CRITERIA_LABELS.items():
-        crit = (data.get("criteres") or {}).get(key) or {}
-        if crit.get("ok") is False:
-            findings.append(Finding(code, Level.WARNING, req.id,
-                                    f"Exigence {label} : {crit.get('commentaire', '').strip()}", source="IA"))
+        crit = criteria.get(key) or {}
+        ok = _ok(crit.get("ok"))
+        if ok is None:
+            continue
+        answered += 1
+        if ok is False:
+            comment = str(crit.get("commentaire") or crit.get("comment") or "").strip()
+            findings.append(Finding(code, Level.WARNING, req.id, f"Exigence {label} : {comment}", source="IA"))
+    # Never fail silently: an empty answer must not look like "requirement is fine".
+    if answered < len(CRITERIA_LABELS):
+        findings.append(Finding("IA-FORMAT", Level.WARNING, req.id,
+                                f"Réponse IA incomplète : {answered}/{len(CRITERIA_LABELS)} critères évalués. "
+                                "Relancer ou consulter le journal d'audit.", source="IA"))
+    if rules and answered and not any(f.level == Level.WARNING and f.code != "IA-FORMAT" for f in findings):
+        findings.append(Finding("IA-DESACCORD", Level.WARNING, req.id,
+                                "L'IA juge l'exigence conforme alors que les contrôles automatiques ont relevé : "
+                                + "; ".join(f.message for f in rules) + " La relecture IA n'est pas fiable ici.",
+                                source="IA"))
     proposals = []
     reformulation = (data.get("reformulation") or "").strip()
     if reformulation and reformulation != req.text:

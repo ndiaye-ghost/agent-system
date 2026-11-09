@@ -27,6 +27,7 @@ from xml.etree import ElementTree
 
 SUPPORTED = {".pdf", ".docx", ".xlsx", ".xlsm", ".csv", ".md", ".txt"}
 MAX_CHARS = 1000
+MIN_RELATIVE_SCORE = 0.35  # keyword matches below 35 % of the best match are ignored
 
 _STOPWORDS = set("""
 le la les un une des du de d l au aux et ou en dans sur pour par avec sans ce cet cette ces qui que quoi dont
@@ -241,7 +242,11 @@ class KnowledgeBase:
                     s += idf * d[t] * (k1 + 1) / (d[t] + k1 * (1 - b + b * lengths[i] / avgdl))
             if s > 0:
                 scores.append((s, i))
-        return [i for _, i in sorted(scores, reverse=True)]
+        if not scores:
+            return []
+        best = max(scores)[0]
+        # Drop weak matches (e.g. a document header sharing one common word with the query)
+        return [i for s, i in sorted(scores, reverse=True) if s >= MIN_RELATIVE_SCORE * best]
 
     def _vector_ranking(self, query: str, llm) -> list[int]:
         if not (llm is not None and self.embed_model and hasattr(llm, "embed")):

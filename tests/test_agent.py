@@ -64,8 +64,47 @@ def test_review_requirement_parses_model_json():
         "reformulation": "Le BMS doit détecter une perte de communication CAN en moins de 50 ms.",
         "justification": "Valeur chiffrée"}) + "\n```"}
     findings, proposals = review_requirement(FakeLLM([reply]), p, p.requirements["FSR-06"])
-    assert [f.source for f in findings] == ["IA"]
+    assert {f.code for f in findings} == {"IA-AMBIG", "IA-FORMAT"}  # only 2/7 criteria answered
+    assert all(f.source == "IA" for f in findings)
     assert proposals[0].kind == "reformulation"
+
+
+def _review_with(answer: dict, req_id="FSR-06"):
+    p = project()
+    return review_requirement(FakeLLM([{"content": json.dumps(answer, ensure_ascii=False)}]), p, p.requirements[req_id])
+
+
+ALL = ["non_ambigue", "comprehensible", "atomique", "coherente", "faisable", "verifiable", "necessaire"]
+
+
+def test_review_accepts_accents_and_oui_non():
+    answer = {"Critères": {**{k: {"commentaire": "", "ok": "oui"} for k in ALL},
+                           "non-ambiguë": {"commentaire": "« rapidement »", "ok": "non"},
+                           "Vérifiable": {"commentaire": "pas de seuil", "ok": "false"}}}
+    findings, _ = _review_with(answer)
+    assert {f.code for f in findings} == {"IA-AMBIG", "IA-VERIF"}
+
+
+def test_review_flags_empty_answer():
+    findings, _ = _review_with({"reformulation": ""})
+    assert [f.code for f in findings] == ["IA-FORMAT"]
+
+
+def test_review_flags_disagreement_with_rules():
+    findings, _ = _review_with({"criteres": {k: {"commentaire": "", "ok": True} for k in ALL}})
+    assert [f.code for f in findings] == ["IA-DESACCORD"]  # FSR-06 contains "rapidement"
+
+
+def test_review_prompt_contains_rule_findings():
+    p = project()
+    llm = FakeLLM([{"content": "{}"}])
+    review_requirement(llm, p, p.requirements["FSR-06"])
+    assert "rapidement" in llm.calls[0]["messages"][1]["content"].split("Contrôles automatiques")[1]
+
+
+def test_clean_requirement_has_no_disagreement():
+    findings, _ = _review_with({"criteres": {k: {"commentaire": "", "ok": True} for k in ALL}}, "FSR-01")
+    assert findings == []
 
 
 def test_suggest_failure_modes():
