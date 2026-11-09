@@ -7,3 +7,4 @@ rapport_*.md
 propositions_amdec.csv
 .ipynb_checkpoints/
 .venv/
+*.zip
