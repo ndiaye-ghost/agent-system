@@ -9,3 +9,4 @@ propositions_amdec.csv
 .venv/
 *.zip
 base_documentaire.json
+journal_validations.csv

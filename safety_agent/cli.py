@@ -62,6 +62,23 @@ def cmd_search(args) -> int:
     return 0
 
 
+def cmd_web(args) -> int:
+    import subprocess
+
+    script = Path(__file__).with_name("webapp.py")
+    address = "0.0.0.0" if args.partage else "localhost"
+    cmd = [sys.executable, "-m", "streamlit", "run", str(script),
+           "--server.address", address, "--server.port", str(args.port),
+           "--server.headless", "true" if args.partage else "false",
+           "--browser.gatherUsageStats", "false",  # no telemetry sent outside the company
+           "--client.toolbarMode", "minimal"]  # hides the "Deploy" (publish to cloud) button
+    if args.partage:
+        import socket
+
+        print(f"Page partagée. Adresse pour les collègues : http://{socket.gethostname()}:{args.port}", file=sys.stderr)
+    return subprocess.call(cmd)
+
+
 def cmd_check(args) -> int:
     project, findings = load_project(args.reqs, args.fmea)
     findings += run_all_checks(project)
@@ -194,8 +211,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--model", help=argparse.SUPPRESS)
     p.set_defaults(func=cmd_search)
 
+    p = sub.add_parser("web", help="Ouvrir la page web")
+    p.add_argument("--partage", action="store_true",
+                   help="Rendre la page accessible aux collègues du réseau (http://nom-du-pc:PORT)")
+    p.add_argument("--port", type=int, default=8501)
+    p.set_defaults(func=cmd_web)
+
     args = parser.parse_args(argv)
-    if args.command not in {"index", "search"} and not (args.reqs or args.fmea):
+    if args.command not in {"index", "search", "web"} and not (args.reqs or args.fmea):
         parser.error("indiquez au moins --reqs ou --fmea")
     try:
         return args.func(args)

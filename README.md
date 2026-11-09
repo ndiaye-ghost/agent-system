@@ -52,6 +52,24 @@ Assistant IA pour la sûreté de fonctionnement automobile (**ISO 26262**) : con
 
 **Sans serveur de modèle**, les notebooks 02 à 04 passent automatiquement en **mode démo** : réponses simulées, clairement marquées `[DÉMO]`, pour découvrir le fonctionnement. Pour de vraies analyses, installez Ollama (voir plus bas).
 
+## Page web
+
+Une page dans le navigateur pour utiliser l'outil sans VS Code : contrôles, relecture IA, modes de défaillance, discussion avec l'agent, recherche documentaire, et boutons **Valider / Rejeter** pour chaque proposition de l'IA.
+
+**Sur votre PC** : double-cliquez sur `lancer_page_web.bat`. La page s'ouvre dans le navigateur. Gardez la fenêtre noire ouverte : la fermer arrête la page.
+
+**Pour les collègues** : double-cliquez sur `lancer_page_web_partagee.bat`. La fenêtre affiche l'adresse à leur donner, par exemple `http://NOM-DU-PC:8501`. Ils l'ouvrent dans leur navigateur, **sans rien installer**.
+
+Conditions pour le partage :
+- le PC qui partage reste allumé, avec Ollama et la fenêtre noire ouverts ;
+- le **pare-feu Windows** doit autoriser Python à recevoir des connexions, ce qui demande souvent la DSI ;
+- **un seul modèle répond à tout le monde** : sur un PC sans carte graphique, les questions sont traitées l'une après l'autre et c'est lent. Pour une équipe, installez la page et le modèle sur un **serveur avec GPU** ;
+- **il n'y a pas d'authentification** : toute personne du réseau qui connaît l'adresse peut ouvrir la page. Les fichiers déposés et le journal restent sur le PC qui partage.
+
+**Traçabilité** : chaque décision (qui, quand, quelle proposition, validée ou rejetée, commentaire, modèle utilisé) est ajoutée au fichier `journal_validations.csv`, ouvrable dans Excel. En mode partagé, tous les collègues écrivent dans le même journal.
+
+En ligne de commande : `safety-agent web`, ou `safety-agent web --partage --port 8501`.
+
 ## Installation (ligne de commande)
 
 Python 3.10 ou plus. Aucune dépendance obligatoire (`openpyxl` seulement pour lire l'Excel).
@@ -167,6 +185,8 @@ safety_agent/
   notebook.py       Tableaux pandas et choix du modèle pour les notebooks
   demo.py           Faux modèle (réponses simulées) pour le mode démo
   knowledge.py      Base documentaire : lecture PDF/Word/Excel, découpage, recherche
+  webapp.py         Page web (Streamlit)
+  validation.py     Journal des validations et rejets
 notebooks/          Notebooks Jupyter 00 à 04
 ```
 
@@ -185,5 +205,5 @@ pytest
 - Import ReqIF (DOORS, Polarion) et export vers votre outil AMDEC (APIS IQ, Medini…).
 - Enregistrer les validations et rejets des propositions pour mesurer la qualité et préparer un éventuel fine-tuning.
 - Analyse FMEDA (métriques SPFM / LFM / PMHF) et arbres de défaillance.
-- Interface web pour valider ou rejeter les propositions une par une.
+- Authentification des utilisateurs (annuaire de l'entreprise) pour le mode partagé.
 - Jeu d'évaluation interne pour mesurer la qualité de chaque modèle sur vos données.

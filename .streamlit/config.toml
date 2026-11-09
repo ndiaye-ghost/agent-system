@@ -1,0 +1,13 @@
+[browser]
+# Aucune statistique d'usage envoyée à l'extérieur
+gatherUsageStats = false
+
+[server]
+maxUploadSize = 200
+
+[theme]
+base = "light"
+
+[client]
+# Masque le bouton « Deploy » (publication sur le cloud Streamlit)
+toolbarMode = "minimal"
