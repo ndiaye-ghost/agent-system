@@ -62,22 +62,47 @@ def cmd_search(args) -> int:
     return 0
 
 
+def _port_in_use(port: int) -> bool:
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.5)
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+
 def cmd_web(args) -> int:
+    import os
     import subprocess
+    import webbrowser
+
+    url = f"http://localhost:{args.port}"
+    if _port_in_use(args.port):
+        # Already running (e.g. second double-click on the shortcut): just show it.
+        if not args.sans_navigateur:
+            webbrowser.open(url)
+        print(f"La page tourne déjà : {url}", file=sys.stderr)
+        return 0
 
     script = Path(__file__).with_name("webapp.py")
     address = "0.0.0.0" if args.partage else "localhost"
+    headless = args.partage or args.sans_navigateur
     cmd = [sys.executable, "-m", "streamlit", "run", str(script),
            "--server.address", address, "--server.port", str(args.port),
-           "--server.headless", "true" if args.partage else "false",
+           "--server.headless", "true" if headless else "false",
            "--browser.gatherUsageStats", "false",  # no telemetry sent outside the company
            "--client.toolbarMode", "minimal",  # hides the "Deploy" (publish to cloud) button
            "--theme.base", "light", "--theme.primaryColor", "#2b2d31"]
+    env = {**os.environ, "SAFETY_AGENT_PARTAGE": "1" if args.partage else "0"}
     if args.partage:
         import socket
 
         print(f"Page partagée. Adresse pour les collègues : http://{socket.gethostname()}:{args.port}", file=sys.stderr)
-    return subprocess.call(cmd)
+    if sys.stdout is None:
+        # Started from a shortcut with pythonw.exe (no console window): write the server output to a log file.
+        log_path = Path(__file__).resolve().parent.parent / "page_web.log"
+        with log_path.open("a", encoding="utf-8") as log:
+            return subprocess.call(cmd, env=env, stdout=log, stderr=subprocess.STDOUT)
+    return subprocess.call(cmd, env=env)
 
 
 def cmd_check(args) -> int:
@@ -216,6 +241,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--partage", action="store_true",
                    help="Rendre la page accessible aux collègues du réseau (http://nom-du-pc:PORT)")
     p.add_argument("--port", type=int, default=8501)
+    p.add_argument("--sans-navigateur", action="store_true",
+                   help="Ne pas ouvrir le navigateur (démarrage automatique avec Windows)")
     p.set_defaults(func=cmd_web)
 
     args = parser.parse_args(argv)

@@ -1,0 +1,15 @@
+.git
+.venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+notebooks
+tests
+deploiement/data
+deploiement/documents
+deploiement/secrets.toml
+*.zip
+*.log
+journal_validations.csv
+safety_agent_audit.jsonl
+base_documentaire.json

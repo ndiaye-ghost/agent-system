@@ -5,6 +5,7 @@ Run with:  safety-agent web            (this PC only)
 """
 from __future__ import annotations
 
+import os
 import sys
 import tempfile
 import uuid
@@ -51,12 +52,40 @@ ss.setdefault("agents", {})          # conversation id -> SafetyAgent
 ss.setdefault("proposals", {})       # proposal id -> Proposal
 ss.setdefault("review_res", None)
 ss.setdefault("suggest_ids", [])
+# On a server, the IT team sets these through environment variables (see deploiement/GUIDE_DSI.md).
+SERVER_MODE = os.getenv("SAFETY_AGENT_SERVEUR") == "1"  # model settings locked for users
+COMPANY_DOCS = os.getenv("SAFETY_AGENT_DOCS", "")       # company documents folder, loaded by default
+
 ss.setdefault("cfg", {
-    "user": "", "base_url": LLMConfig().base_url, "model": "qwen2.5:7b",
+    "user": "", "base_url": LLMConfig().base_url, "model": os.getenv("SAFETY_AGENT_MODEL", "qwen2.5:7b"),
     "data_mode": "Exemple", "reqs_file": None, "fmea_file": None,
-    "kb_mode": "Exemples", "kb_folder": "", "kb_files": (),
+    "kb_mode": "Dossier" if COMPANY_DOCS else "Exemples", "kb_folder": COMPANY_DOCS, "kb_files": (),
 })
 cfg = ss.cfg
+
+
+# ----------------------------------------------------------------------------- company sign-in (optional)
+
+def sso_configured() -> bool:
+    """True when the IT team has set up company sign-in in .streamlit/secrets.toml ([auth] section)."""
+    try:
+        return "auth" in st.secrets
+    except Exception:  # no secrets file
+        return False
+
+
+SSO = sso_configured()
+if SSO:
+    if not st.user.get("is_logged_in", False):
+        st.markdown(f'''<div style="text-align:center;margin-top:22vh">
+            <h1 style="font-size:1.9rem;font-weight:600">{APP_NAME}</h1>
+            <p style="color:#6e7781">Connectez-vous avec votre compte de l'entreprise.</p></div>''',
+                    unsafe_allow_html=True)
+        _, mid, _ = st.columns([2, 1, 2])
+        if mid.button("Se connecter", type="primary", width="stretch"):
+            st.login()
+        st.stop()
+    cfg["user"] = str(st.user.get("name") or st.user.get("email") or "")
 
 
 # ----------------------------------------------------------------------------- style
@@ -488,11 +517,19 @@ def page_settings() -> None:
     before = dict(cfg)
 
     st.subheader("Utilisateur")
-    cfg["user"] = st.text_input("Votre nom", cfg["user"], help="Enregistré dans le journal des décisions.")
+    if SSO:
+        st.write(cfg["user"])
+        st.caption("Nom issu de votre compte de l'entreprise, enregistré dans le journal des décisions.")
+        st.button("Se déconnecter", on_click=st.logout)
+    else:
+        cfg["user"] = st.text_input("Votre nom", cfg["user"], help="Enregistré dans le journal des décisions.")
 
     st.subheader("Modèle")
-    cfg["base_url"] = st.text_input("Adresse du serveur", cfg["base_url"])
-    cfg["model"] = st.text_input("Modèle", cfg["model"])
+    if SERVER_MODE:
+        st.write(f"{cfg['model']} — géré par l'administrateur du serveur.")
+    else:
+        cfg["base_url"] = st.text_input("Adresse du serveur", cfg["base_url"])
+        cfg["model"] = st.text_input("Modèle", cfg["model"])
     if st.button("Tester la connexion"):
         check_connection(force=True)
         st.rerun()
@@ -521,10 +558,17 @@ def page_settings() -> None:
 
     st.subheader("Base documentaire")
     kb_modes = ["Exemples", "Dossier", "Téléverser", "Aucune"]
-    cfg["kb_mode"] = st.radio("Documents", kb_modes, index=kb_modes.index(cfg["kb_mode"]), horizontal=True)
+    labels = {"Dossier": "Documents de l'entreprise"} if SERVER_MODE else {}
+    cfg["kb_mode"] = st.radio("Documents", kb_modes, index=kb_modes.index(cfg["kb_mode"]), horizontal=True,
+                              format_func=lambda m: labels.get(m, m))
     if cfg["kb_mode"] == "Dossier":
-        cfg["kb_folder"] = st.text_input("Chemin du dossier", cfg["kb_folder"],
-                                         help="Dossier sur la machine qui fait tourner la page.")
+        if SERVER_MODE:  # users must not browse the server's file system
+            cfg["kb_folder"] = COMPANY_DOCS
+            st.caption("Dossier géré par l'administrateur du serveur." if COMPANY_DOCS
+                       else "Aucun dossier configuré par l'administrateur.")
+        else:
+            cfg["kb_folder"] = st.text_input("Chemin du dossier", cfg["kb_folder"],
+                                             help="Dossier sur la machine qui fait tourner la page.")
     elif cfg["kb_mode"] == "Téléverser":
         docs = st.file_uploader("Documents", type=[s.lstrip(".") for s in sorted(SUPPORTED)],
                                 accept_multiple_files=True)
@@ -536,6 +580,12 @@ def page_settings() -> None:
         st.caption(f"{len(kb.documents)} document(s), {len(kb.chunks)} extraits.")
         for d in (d for d in kb.documents if "error" in d):
             st.warning(f"{d['path']} illisible : {d['error']}")
+    if os.getenv("SAFETY_AGENT_PARTAGE") != "1" and not SERVER_MODE:  # never offered on a shared page
+        st.subheader("Application")
+        st.caption("Arrête l'application sur ce PC. Pour la relancer : double-clic sur le raccourci.")
+        if st.button("Arrêter l'application", icon=":material/power_settings_new:"):
+            st.info("Application arrêtée. Vous pouvez fermer cet onglet.")
+            os._exit(0)
     if cfg != before:  # apply the new settings to the whole page right away
         st.rerun()
 

@@ -10,3 +10,7 @@ propositions_amdec.csv
 *.zip
 base_documentaire.json
 journal_validations.csv
+page_web.log
+deploiement/data/
+deploiement/documents/
+deploiement/secrets.toml

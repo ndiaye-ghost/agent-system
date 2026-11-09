@@ -88,3 +88,44 @@ def test_agent_prompt_allows_general_questions():
     from safety_agent.prompts import AGENT_SYSTEM
 
     assert "Connaissances générales (à vérifier)" in AGENT_SYSTEM
+
+
+def _server_app(tmp_path, monkeypatch, secrets=None):
+    st_testing = pytest.importorskip("streamlit.testing.v1")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SAFETY_AGENT_BASE_URL", "http://127.0.0.1:9/v1")
+    monkeypatch.setenv("SAFETY_AGENT_SERVEUR", "1")
+    monkeypatch.setenv("SAFETY_AGENT_MODEL", "qwen2.5:32b")
+    monkeypatch.setenv("SAFETY_AGENT_DOCS", str(Path(__file__).parent.parent / "examples" / "documents"))
+    at = st_testing.AppTest.from_file(APP, default_timeout=60)
+    for k, v in (secrets or {}).items():
+        at.secrets[k] = v
+    at.run()
+    assert not at.exception, at.exception
+    return at
+
+
+def test_server_mode_locks_model_and_folder(tmp_path, monkeypatch):
+    at = _server_app(tmp_path, monkeypatch)
+    assert at.session_state["cfg"]["model"] == "qwen2.5:32b"
+    assert at.session_state["cfg"]["kb_mode"] == "Dossier"
+    _go(at, "settings")
+    labels = {t.label for t in at.text_input}
+    assert "Adresse du serveur" not in labels and "Chemin du dossier" not in labels
+    assert not any(b.label == "Arrêter l'application" for b in at.button)
+    _go(at, "docs")
+    assert any("4 document(s)" in c.value for c in at.caption)
+
+
+def test_company_sign_in_required_when_configured(tmp_path, monkeypatch):
+    at = _server_app(tmp_path, monkeypatch, secrets={"auth": {
+        "redirect_uri": "http://localhost:8501/oauth2callback", "cookie_secret": "x" * 32,
+        "client_id": "id", "client_secret": "secret",
+        "server_metadata_url": "https://login.microsoftonline.com/tenant/v2.0/.well-known/openid-configuration"}})
+    assert any(b.label == "Se connecter" for b in at.button)
+    assert not at.chat_input  # nothing else is shown before sign-in
+
+
+def test_local_mode_offers_stop_button(app):
+    _go(app, "settings")
+    assert any(b.label == "Arrêter l'application" for b in app.button)

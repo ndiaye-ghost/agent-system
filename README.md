@@ -72,6 +72,14 @@ Conditions pour le partage :
 
 En ligne de commande : `safety-agent web`, ou `safety-agent web --partage --port 8501`.
 
+## Installation sur un serveur (pour toute l'équipe)
+
+Pour un vrai site interne, toujours disponible et sans installation sur les postes, la DSI installe la page et le modèle sur un serveur avec carte graphique. Tout est prêt dans le dossier `deploiement/` :
+
+- `GUIDE_DSI.md` : guide complet (matériel, installation, connexion avec les comptes Microsoft de l'entreprise, HTTPS, sécurité, sauvegarde, recette) ;
+- `docker-compose.yml` et `Dockerfile` : installation en une commande ;
+- `secrets.toml.exemple` : modèle de configuration de la connexion d'entreprise.
+
 ## Installation (ligne de commande)
 
 Python 3.10 ou plus. Aucune dépendance obligatoire (`openpyxl` seulement pour lire l'Excel).

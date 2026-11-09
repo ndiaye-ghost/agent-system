@@ -1,0 +1,44 @@
+# Assistant Sûreté : page web + modèle d'IA (Ollama), sur un serveur Linux avec carte graphique NVIDIA.
+# Démarrage :  docker compose -f deploiement/docker-compose.yml up -d --build
+# Voir deploiement/GUIDE_DSI.md
+
+services:
+  ollama:
+    # Fixez une version précise après validation (gestion de configuration ISO 26262).
+    image: ollama/ollama:${OLLAMA_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      OLLAMA_KEEP_ALIVE: "24h"     # garde le modèle en mémoire : pas d'attente au premier message
+      OLLAMA_NUM_PARALLEL: "4"     # nombre de questions traitées en même temps
+    volumes:
+      - ollama-modeles:/root/.ollama
+    # Aucun port publié : le modèle n'est joignable que par la page web, pas depuis le réseau.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  assistant:
+    build:
+      context: ..
+      dockerfile: deploiement/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - ollama
+    ports:
+      - "8501:8501"
+    environment:
+      SAFETY_AGENT_BASE_URL: "http://ollama:11434/v1"
+      SAFETY_AGENT_MODEL: "${SAFETY_AGENT_MODEL:-qwen2.5:32b}"
+      SAFETY_AGENT_DOCS: "/docs"
+    volumes:
+      - ./data:/data                                    # journal des décisions + journal d'audit (à sauvegarder)
+      - ${DOSSIER_DOCUMENTS:-./documents}:/docs:ro      # documents de l'entreprise, en lecture seule
+      # Connexion avec les comptes de l'entreprise : décommentez après avoir créé secrets.toml
+      # - ./secrets.toml:/app/.streamlit/secrets.toml:ro
+
+volumes:
+  ollama-modeles:
