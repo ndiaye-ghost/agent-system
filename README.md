@@ -19,7 +19,39 @@ Assistant IA pour la sûreté de fonctionnement automobile (**ISO 26262**) : con
 - **AMDEC** : cotations manquantes ou hors échelle, priorité d'action H/M sans action, S≥9 sans détection, S≥9 sans exigence tracée, lien vers une exigence inconnue.
 - **Traçabilité** : objectif de sécurité non couvert par l'AMDEC, matrice SG → exigences → lignes AMDEC.
 
-## Installation
+## Démarrage rapide avec VS Code et les notebooks
+
+1. Décompressez le dossier et ouvrez-le dans VS Code (**Fichier → Ouvrir le dossier**).
+2. Acceptez les extensions recommandées (Python, Jupyter).
+3. Créez l'environnement Python dans le terminal de VS Code :
+
+   Windows (PowerShell) :
+   ```powershell
+   python -m venv .venv
+   .venv\Scripts\Activate.ps1
+   pip install -r requirements.txt
+   ```
+
+   Linux / macOS :
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   ```
+
+4. Ouvrez `notebooks/00_installation.ipynb`, choisissez le noyau **.venv** en haut à droite, puis **Exécuter tout**.
+
+| Notebook | Contenu | IA |
+|---|---|---|
+| `00_installation.ipynb` | Vérification de l'installation et du serveur du modèle | — |
+| `01_controles_automatiques.ipynb` | Contrôles des exigences et de l'AMDEC, matrice de traçabilité, rapport | Non |
+| `02_relecture_exigences_ia.ipynb` | Relecture des exigences selon l'ISO 26262-8 §6 | Oui |
+| `03_suggestion_modes_defaillance.ipynb` | Propositions de modes de défaillance, export CSV | Oui |
+| `04_agent_conversationnel.ipynb` | Questions libres à l'agent | Oui |
+
+**Sans serveur de modèle**, les notebooks 02 à 04 passent automatiquement en **mode démo** : réponses simulées, clairement marquées `[DÉMO]`, pour découvrir le fonctionnement. Pour de vraies analyses, installez Ollama (voir plus bas).
+
+## Installation (ligne de commande)
 
 Python 3.10 ou plus. Aucune dépendance obligatoire (`openpyxl` seulement pour lire l'Excel).
 
@@ -106,6 +138,9 @@ safety_agent/
   agent.py          Agent à outils (lecture seule + enregistrement de propositions)
   report.py         Rapport Markdown, export CSV
   cli.py            Ligne de commande
+  notebook.py       Tableaux pandas et choix du modèle pour les notebooks
+  demo.py           Faux modèle (réponses simulées) pour le mode démo
+notebooks/          Notebooks Jupyter 00 à 04
 ```
 
 ## Tests

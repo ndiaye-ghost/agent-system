@@ -3,3 +3,7 @@ __pycache__/
 .pytest_cache/
 safety_agent_audit.jsonl
 propositions_agent.md
+rapport_*.md
+propositions_amdec.csv
+.ipynb_checkpoints/
+.venv/

@@ -79,3 +79,17 @@ def test_suggest_failure_modes():
 
 def test_extract_json_with_prose():
     assert extract_json('Voici : {"a": 1} merci') == {"a": 1}
+
+
+def test_demo_llm_runs_full_workflow():
+    from safety_agent.ai import review_requirements
+    from safety_agent.demo import DemoLLM
+
+    p = project()
+    agent = SafetyAgent(DemoLLM(), p)
+    assert "erreurs" in agent.ask("État des lieux ?")
+    agent.ask("Propose une action pour chaque ligne H sans action.")
+    assert {pr.target for pr in agent.proposals} == {"FM-01", "FM-04"}
+    findings, proposals = review_requirements(DemoLLM(), p, ["FSR-06"])
+    assert "IA-AMBIG" in {f.code for f in findings} and proposals
+    assert suggest_failure_modes(DemoLLM(), p, "Capteur", "Mesurer")

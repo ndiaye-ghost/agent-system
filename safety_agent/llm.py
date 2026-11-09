@@ -69,6 +69,16 @@ class LLMClient:
         self._audit(payload, message)
         return message
 
+    def ping(self) -> list[str]:
+        """Return the model names served at base_url. Raises LLMError if the server is unreachable."""
+        req = urllib.request.Request(self.config.base_url.rstrip("/") + "/models",
+                                     headers={"Authorization": f"Bearer {self.config.api_key}"})
+        try:
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                return [m.get("id", "?") for m in json.loads(resp.read()).get("data", [])]
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            raise LLMError(f"Serveur LLM injoignable à {self.config.base_url} ({e})") from e
+
     def _audit(self, payload: dict, message: dict) -> None:
         if not self.config.audit_log:
             return

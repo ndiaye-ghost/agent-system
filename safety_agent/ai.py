@@ -9,14 +9,15 @@ from .llm import LLMClient, LLMError, extract_json
 from .models import Finding, Level, Project, Proposal, Requirement
 from . import prompts
 
+# criterion -> (finding code, label)
 CRITERIA_LABELS = {
-    "non_ambigue": "ambiguë",
-    "comprehensible": "peu compréhensible",
-    "atomique": "non atomique",
-    "coherente": "incohérente",
-    "faisable": "faisabilité douteuse",
-    "verifiable": "non vérifiable",
-    "necessaire": "nécessité non démontrée",
+    "non_ambigue": ("IA-AMBIG", "ambiguë"),
+    "comprehensible": ("IA-COMPR", "peu compréhensible"),
+    "atomique": ("IA-ATOM", "non atomique"),
+    "coherente": ("IA-COHER", "incohérente"),
+    "faisable": ("IA-FAISA", "faisabilité douteuse"),
+    "verifiable": ("IA-VERIF", "non vérifiable"),
+    "necessaire": ("IA-NECES", "nécessité non démontrée"),
 }
 
 
@@ -33,10 +34,10 @@ def review_requirement(llm: LLMClient, project: Project, req: Requirement) -> tu
     )
     data = extract_json(answer.get("content", ""))
     findings: list[Finding] = []
-    for key, label in CRITERIA_LABELS.items():
+    for key, (code, label) in CRITERIA_LABELS.items():
         crit = (data.get("criteres") or {}).get(key) or {}
         if crit.get("ok") is False:
-            findings.append(Finding(f"IA-{key[:4].upper()}", Level.WARNING, req.id,
+            findings.append(Finding(code, Level.WARNING, req.id,
                                     f"Exigence {label} : {crit.get('commentaire', '').strip()}", source="IA"))
     proposals = []
     reformulation = (data.get("reformulation") or "").strip()
