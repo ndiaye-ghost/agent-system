@@ -125,7 +125,11 @@ CSS = """
 html, body, [data-testid="stAppViewContainer"], [data-testid="stSidebar"], .stMarkdown, input, textarea, button {
   font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
 }
-#MainMenu, footer, [data-testid="stToolbar"], [data-testid="stDecoration"] { display: none !important; }
+#MainMenu, footer, [data-testid="stDecoration"], [data-testid="stMainMenu"], [data-testid="stToolbarActions"],
+[data-testid="stAppDeployButton"], [data-testid="stStatusWidget"] { display: none !important; }
+/* keep the toolbar itself: it holds the button that reopens the side menu */
+[data-testid="stExpandSidebarButton"] { display: flex !important; }
+[data-testid="stHeaderLogo"] img, [data-testid="stHeaderLogo"] { height: 2.4rem !important; width: auto !important; }
 [data-testid="stHeader"] { background: transparent; }
 .block-container, [data-testid="stBottomBlockContainer"] { max-width: __WIDTH__; }
 .block-container { padding-top: 2.2rem; padding-bottom: 6rem; }
