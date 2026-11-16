@@ -129,3 +129,20 @@ def test_company_sign_in_required_when_configured(tmp_path, monkeypatch):
 def test_local_mode_offers_stop_button(app):
     _go(app, "settings")
     assert any(b.label == "Arrêter l'application" for b in app.button)
+
+
+def test_chat_shows_times_and_no_details(app):
+    app.chat_input[0].set_value("c'est quoi un AMDEC").run()
+    assert not app.exception, app.exception
+    times = [m.value for m in app.markdown if m.value.startswith('<div class="sa-time"')]
+    assert len(times) == 2 and "réponse en" in times[1]
+    assert not any(e.label == "Détails" for e in app.expander)
+
+
+def test_format_duration():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("w", APP)
+    src = Path(APP).read_text()
+    ns = {}
+    exec(src[src.index("def format_duration"):src.index("def message_time")], ns)
+    assert ns["format_duration"](12) == "12 s" and ns["format_duration"](112) == "1 min 52 s"

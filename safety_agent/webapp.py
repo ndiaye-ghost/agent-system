@@ -9,6 +9,7 @@ import os
 import sys
 import tempfile
 import uuid
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -135,6 +136,8 @@ h2, h3 { font-size: 1.1rem !important; font-weight: 600 !important; padding-top:
 .sa-hero h1 { font-size: 1.9rem !important; color: #1f2328; margin-bottom: 0.3rem; }
 .sa-hero p { color: #6e7781; }
 .sa-note { color: #8b8f97; font-size: 0.8rem; text-align: center; }
+.sa-time { color: #8b8f97; font-size: 0.75rem; margin-top: 0.15rem; }
+[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) .sa-time { text-align: right; }
 </style>
 """
 
@@ -359,10 +362,8 @@ def page_chat() -> None:
         for m in (conv["messages"] if conv else []):
             with st.chat_message(m["role"]):
                 st.markdown(m["content"])
-                if m.get("tools"):
-                    with st.expander("Détails"):
-                        for name, args in m["tools"]:
-                            st.caption(f"{name} {args or ''}")
+                if m.get("time"):
+                    st.markdown(f'<div class="sa-time">{message_time(m)}</div>', unsafe_allow_html=True)
 
     question = st.chat_input("Posez votre question") or pending_question
     if question:
@@ -373,9 +374,11 @@ def page_chat() -> None:
             ss.active = conv["id"]
         hero.empty()
         agent = get_agent(conv)
-        conv["messages"].append({"role": "user", "content": question})
+        asked = datetime.now()
+        conv["messages"].append({"role": "user", "content": question, "time": asked.strftime("%H:%M")})
         with st.chat_message("user"):
             st.markdown(question)
+            st.markdown(f'<div class="sa-time">{asked:%H:%M}</div>', unsafe_allow_html=True)
         tools: list = []
         agent.on_tool = lambda name, args: tools.append((name, args))
         before = len(agent.proposals)
@@ -386,8 +389,25 @@ def page_chat() -> None:
                 answer = f"Le modèle ne répond pas : {e}"
         if register(agent.proposals[before:]):
             answer += "\n\n*Des propositions ont été enregistrées : voir « Propositions ».*"
-        conv["messages"].append({"role": "assistant", "content": answer, "tools": tools})
+        answered = datetime.now()
+        conv["messages"].append({"role": "assistant", "content": answer, "tools": tools,
+                                 "time": answered.strftime("%H:%M"),
+                                 "seconds": round((answered - asked).total_seconds())})
         st.rerun()
+
+
+def format_duration(seconds: int) -> str:
+    if seconds < 60:
+        return f"{seconds} s"
+    minutes, rest = divmod(seconds, 60)
+    return f"{minutes} min {rest:02d} s"
+
+
+def message_time(m: dict) -> str:
+    """'14:32' for a question, '14:34 · réponse en 1 min 52 s' for an answer."""
+    if m["role"] == "assistant" and "seconds" in m:
+        return f"{m['time']} · réponse en {format_duration(m['seconds'])}"
+    return m["time"]
 
 
 def page_checks() -> None:
