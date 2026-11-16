@@ -20,6 +20,7 @@ import pandas as pd  # noqa: E402
 import streamlit as st  # noqa: E402
 
 from safety_agent.agent import SafetyAgent  # noqa: E402
+from safety_agent.branding import accent, logo_path, tint  # noqa: E402
 from safety_agent.ai import review_requirements, suggest_failure_modes  # noqa: E402
 from safety_agent.checks import run_all_checks  # noqa: E402
 from safety_agent.checks.action_priority import action_priority  # noqa: E402
@@ -42,7 +43,22 @@ SUGGESTIONS = [
     ("Question de méthode", "Qu'est-ce que le FTTI et comment l'utiliser dans une exigence ?"),
 ]
 
-st.set_page_config(page_title=APP_NAME, page_icon=":material/shield:", layout="wide",
+ACCENT = accent()
+LOGO = logo_path()
+
+
+def page_icon():
+    if LOGO and LOGO.suffix.lower() != ".svg":
+        try:
+            from PIL import Image
+
+            return Image.open(LOGO)
+        except Exception:  # unreadable image: keep the default icon
+            pass
+    return ":material/shield:"
+
+
+st.set_page_config(page_title=APP_NAME, page_icon=page_icon(), layout="wide",
                    initial_sidebar_state="expanded")
 
 ss = st.session_state
@@ -104,7 +120,7 @@ h1 { font-size: 1.6rem !important; font-weight: 600 !important; padding-bottom: 
 h2, h3 { font-size: 1.1rem !important; font-weight: 600 !important; padding-top: 1rem !important; }
 
 /* sidebar */
-[data-testid="stSidebar"] { background: #f7f7f8; border-right: 1px solid #ececec; }
+[data-testid="stSidebar"] { background: #ffffff; border-right: 1px solid #ececec; border-top: 4px solid __ACCENT__; }
 [data-testid="stSidebarHeader"] { padding: 0.6rem 0.8rem 0; height: 2.6rem; }
 [data-testid="stSidebarUserContent"] { padding-top: 0; }
 [data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 2px; }
@@ -114,11 +130,15 @@ h2, h3 { font-size: 1.1rem !important; font-weight: 600 !important; padding-top:
   padding: 0.42rem 0.6rem; min-height: 0; color: #1f2328;
 }
 [data-testid="stSidebar"] button > div { justify-content: flex-start !important; width: 100%; gap: 0.55rem; }
-[data-testid="stSidebar"] button:hover { background: #ececf1; color: #1f2328; }
-[data-testid="stSidebar"] [data-testid="stBaseButton-secondary"] { background: #e6e6ea; }
-[data-testid="stSidebar"] .st-key-nav_new button { background: #ffffff; border: 1px solid #dcdce0; margin-bottom: 0.3rem; }
+[data-testid="stSidebar"] button:hover { background: __TINT2__; color: #1f2328; }
+[data-testid="stSidebar"] [data-testid="stBaseButton-secondary"] { background: __TINT1__; color: __ACCENT__; font-weight: 600; }
+[data-testid="stSidebar"] [data-testid="stBaseButton-secondary"] p { color: __ACCENT__; }
+[data-testid="stSidebar"] .st-key-nav_new button { background: __ACCENT__; border: 1px solid __ACCENT__; margin-bottom: 0.3rem; }
+[data-testid="stSidebar"] .st-key-nav_new button p, [data-testid="stSidebar"] .st-key-nav_new button span { color: #ffffff !important; }
+[data-testid="stSidebar"] .st-key-nav_new button:hover { background: __ACCENT_DARK__; }
 [data-testid="stSidebar"] button p { font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sa-brand { font-weight: 600; font-size: 1rem; padding: 0 0.6rem 0.6rem; color: #1f2328; }
+.sa-brand { font-weight: 700; font-size: 1.02rem; padding: 0 0.6rem 0.6rem; color: __ACCENT__; }
+[data-testid="stSidebarHeader"] img, [data-testid="stLogo"] { max-height: 3rem; }
 .sa-section { font-size: 0.72rem; color: #8b8f97; text-transform: uppercase; letter-spacing: .05em;
               margin: 1rem 0 0.25rem 0.6rem; }
 .sa-status { font-size: 0.82rem; color: #57606a; padding: 0.1rem 0.6rem; }
@@ -134,6 +154,7 @@ h2, h3 { font-size: 1.1rem !important; font-weight: 600 !important; padding-top:
 [data-testid="stChatInput"] { border-radius: 24px; }
 .sa-hero { text-align: center; margin: 14vh 0 2rem; }
 .sa-hero h1 { font-size: 1.9rem !important; color: #1f2328; margin-bottom: 0.3rem; }
+.stButton button[kind="secondary"]:hover { border-color: __ACCENT__; color: __ACCENT__; }
 .sa-hero p { color: #6e7781; }
 .sa-note { color: #8b8f97; font-size: 0.8rem; text-align: center; }
 .sa-time { color: #8b8f97; font-size: 0.75rem; margin-top: 0.15rem; }
@@ -143,7 +164,14 @@ h2, h3 { font-size: 1.1rem !important; font-weight: 600 !important; padding-top:
 
 
 def inject_css(wide: bool) -> None:
-    st.markdown(CSS.replace("__WIDTH__", "1100px" if wide else "780px"), unsafe_allow_html=True)
+    css = (CSS.replace("__WIDTH__", "1100px" if wide else "780px").replace("__ACCENT_DARK__", _darker(ACCENT))
+           .replace("__ACCENT__", ACCENT).replace("__TINT1__", tint(ACCENT, 0.88)).replace("__TINT2__", tint(ACCENT, 0.94)))
+    st.markdown(css, unsafe_allow_html=True)
+
+
+def _darker(hex_color: str) -> str:
+    r, g, b = (int(hex_color[i:i + 2], 16) for i in (1, 3, 5))
+    return f"#{int(r * .82):02x}{int(g * .82):02x}{int(b * .82):02x}"
 
 
 # ----------------------------------------------------------------------------- cached loaders
@@ -304,6 +332,8 @@ def findings_table(findings, key: str) -> None:
 
 # ----------------------------------------------------------------------------- sidebar
 
+if LOGO:
+    st.logo(str(LOGO), size="large")
 with st.sidebar:
     st.markdown(f'<div class="sa-brand">{APP_NAME}</div>', unsafe_allow_html=True)
     st.button("Nouvelle conversation", icon=":material/edit_square:", on_click=new_conversation,

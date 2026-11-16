@@ -14,3 +14,4 @@ page_web.log
 deploiement/data/
 deploiement/documents/
 deploiement/secrets.toml
+assets/logo.*

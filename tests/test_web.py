@@ -170,3 +170,26 @@ def test_shortcut_launch_without_console_writes_log(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "stdout", None)  # what pythonw.exe gives
     assert cli.main(["web"]) == 0
     assert calls[0]["stdout"].name.endswith("page_web.log")
+
+
+def test_branding_colour_and_logo(tmp_path, monkeypatch):
+    from safety_agent import branding
+
+    monkeypatch.setenv("SAFETY_AGENT_COULEUR", "#E2001A")
+    assert branding.accent() == "#E2001A"
+    monkeypatch.setenv("SAFETY_AGENT_COULEUR", "rouge")  # invalid code: default red
+    assert branding.accent() == branding.ACCENT_DEFAULT
+    assert branding.tint("#c8102e", 1.0) == "#ffffff"
+
+    from PIL import Image
+
+    logo = tmp_path / "logo.png"
+    Image.new("RGB", (40, 12), (200, 16, 46)).save(logo)
+    monkeypatch.setenv("SAFETY_AGENT_LOGO", str(logo))
+    assert branding.logo_path() == logo
+    st_testing = pytest.importorskip("streamlit.testing.v1")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SAFETY_AGENT_BASE_URL", "http://127.0.0.1:9/v1")
+    at = st_testing.AppTest.from_file(APP, default_timeout=60)
+    at.run()
+    assert not at.exception, at.exception

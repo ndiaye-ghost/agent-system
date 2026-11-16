@@ -13,6 +13,7 @@ RUN pip install -r /tmp/requirements.txt
 
 COPY safety_agent/ safety_agent/
 COPY examples/ examples/
+COPY assets/ assets/
 COPY .streamlit/config.toml .streamlit/config.toml
 
 # Utilisateur sans droits d'administration ; /data reçoit le journal et le journal d'audit.

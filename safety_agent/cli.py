@@ -6,6 +6,7 @@ import json
 import sys
 from pathlib import Path
 
+from .branding import accent
 from .checks import run_all_checks
 from .llm import LLMClient, LLMConfig, LLMError
 from .loaders import load_project
@@ -91,7 +92,7 @@ def cmd_web(args) -> int:
            "--server.headless", "true" if headless else "false",
            "--browser.gatherUsageStats", "false",  # no telemetry sent outside the company
            "--client.toolbarMode", "minimal",  # hides the "Deploy" (publish to cloud) button
-           "--theme.base", "light", "--theme.primaryColor", "#2b2d31"]
+           "--theme.base", "light", "--theme.primaryColor", accent()]
     env = {**os.environ, "SAFETY_AGENT_PARTAGE": "1" if args.partage else "0"}
     if args.partage:
         import socket
