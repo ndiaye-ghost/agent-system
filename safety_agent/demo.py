@@ -21,6 +21,10 @@ class DemoLLM:
             return {"role": "assistant", "content": json.dumps(self._review(messages[-1]["content"]), ensure_ascii=False)}
         if system == prompts.SUGGEST_SYSTEM:
             return {"role": "assistant", "content": json.dumps(self._suggest(messages[-1]["content"]), ensure_ascii=False)}
+        if system == prompts.GENERAL_SYSTEM:
+            block = messages[-1]["content"].split("Glossaire (définitions de référence) :")[1]
+            block = block.split("Extraits des documents de l'entreprise :")[0].strip()
+            return _text("[DÉMO — pas d'IA, définition reprise du glossaire intégré]\n\n" + block)
         if not tools:
             return _text("[DÉMO] Ceci est une réponse simulée : aucun modèle n'est connecté. "
                          "Lancez Ollama ou vLLM pour obtenir de vraies réponses.")

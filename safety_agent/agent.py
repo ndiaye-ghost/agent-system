@@ -7,6 +7,8 @@ Requires a model with tool calling (Qwen 2.5/3, Llama 3.1+, Mistral Small/Nemo..
 from __future__ import annotations
 
 import json
+import re
+import unicodedata
 from typing import Callable
 
 from .checks import run_all_checks
@@ -15,7 +17,8 @@ from .checks.fmea import row_ap, traceability_matrix
 from .llm import LLMClient
 from .models import FmeaRow, Project, Proposal, Requirement
 from . import prompts
-from .knowledge import KnowledgeBase
+from .glossary import find_terms, format_terms
+from .knowledge import KnowledgeBase, format_context
 
 
 def _req_dict(r: Requirement) -> dict:
@@ -63,6 +66,37 @@ SEARCH_TOOL = _fn(
     "Recherche dans la base documentaire de l'entreprise (procédures, guides, AMDEC passées, retours d'expérience). "
     "Renvoie des extraits avec leur source.",
     {"query": {"type": "string", "description": "Mots-clés ou question"}}, ["query"])
+
+
+_GENERAL_PATTERNS = [
+    "c'est quoi", "c est quoi", "qu'est-ce", "qu est-ce", "qu'est ce", "qu est ce", "definition", "definir",
+    "que signifie", "que veut dire", "signifie", "veut dire", "explique", "expliquer", "difference entre",
+    "a quoi sert", "comment fonctionne", "comment calculer", "comment on calcule", "comment utiliser",
+    "c'est quoi la difference", "what is", "define",
+]
+_PROJECT_PATTERNS = [
+    "etat des lieux", "anomalie", "nos ", "notre ", "mon ", "mes ", "ce projet", "du projet", "le projet",
+    "fichier", "quelles lignes", "quelles exigences", "quels modes", "combien", "liste ", "lister",
+    "couvert", "erreurs", "procedure", "retour d'experience", "retours d'experience", "rex",
+]
+_ID_RE = re.compile(r"\b(?:SG|FSR|TSR|HSR|SSR|SW|FM|G\d)-\w+", re.I)
+
+
+def _norm_q(text: str) -> str:
+    text = text.lower().replace("\u2019", "'").replace("\u2018", "'")  # typographic apostrophes
+    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+
+
+def is_general_question(question: str, project: Project | None = None) -> bool:
+    """Definition / method question (answered without the project tools) vs question about the project data."""
+    q = f" {_norm_q(question)} "
+    if _ID_RE.search(question):
+        return False
+    if project and any(f" {i.lower()} " in q for i in [*project.requirements, *project.fmea]):
+        return False
+    if any(p in q for p in _PROJECT_PATTERNS):
+        return False
+    return any(p in q for p in _GENERAL_PATTERNS)
 
 
 class SafetyAgent:
@@ -118,6 +152,30 @@ class SafetyAgent:
 
     # ---- loop
     def ask(self, question: str) -> str:
+        if is_general_question(question, self.project):
+            return self._answer_general(question)
+        return self._answer_with_tools(question)
+
+    def _answer_general(self, question: str) -> str:
+        """Definition or method question: glossary + company documents, no project tools."""
+        terms = find_terms(question)
+        if self.on_tool:
+            self.on_tool("glossaire", {"termes": [t.name for t in terms]})
+        hits = self.kb.search(question, k=3, llm=self.llm) if self.kb else []
+        if hits and self.on_tool:
+            self.on_tool("search_knowledge", {"query": question})
+        history = [m for m in self.messages[1:] if m["role"] in ("user", "assistant") and m.get("content")][-6:]
+        user = prompts.GENERAL_USER.format(
+            question=question, glossary=format_terms(terms),
+            knowledge=format_context(hits) if hits else "Aucun extrait pertinent.")
+        msg = self.llm.chat([{"role": "system", "content": prompts.GENERAL_SYSTEM},
+                             *[{"role": m["role"], "content": m["content"]} for m in history],
+                             {"role": "user", "content": user}])
+        answer = msg.get("content") or ""
+        self.messages += [{"role": "user", "content": question}, {"role": "assistant", "content": answer}]
+        return answer
+
+    def _answer_with_tools(self, question: str) -> str:
         self.messages.append({"role": "user", "content": question})
         for _ in range(self.max_steps):
             msg = self.llm.chat(self.messages, tools=self.tools)
