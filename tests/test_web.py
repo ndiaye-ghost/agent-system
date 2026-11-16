@@ -146,3 +146,27 @@ def test_format_duration():
     ns = {}
     exec(src[src.index("def format_duration"):src.index("def message_time")], ns)
     assert ns["format_duration"](12) == "12 s" and ns["format_duration"](112) == "1 min 52 s"
+
+
+def test_shortcut_launch_when_already_running_just_opens_browser(monkeypatch):
+    from safety_agent import cli
+
+    opened = []
+    monkeypatch.setattr(cli, "_port_in_use", lambda port: True)
+    monkeypatch.setattr("webbrowser.open", lambda url: opened.append(url))
+    assert cli.main(["web"]) == 0
+    assert opened == ["http://localhost:8501"]
+
+
+def test_shortcut_launch_without_console_writes_log(monkeypatch, tmp_path):
+    import subprocess
+    import sys
+
+    from safety_agent import cli
+
+    calls = []
+    monkeypatch.setattr(cli, "_port_in_use", lambda port: False)
+    monkeypatch.setattr(subprocess, "call", lambda cmd, **kw: calls.append(kw) or 0)
+    monkeypatch.setattr(sys, "stdout", None)  # what pythonw.exe gives
+    assert cli.main(["web"]) == 0
+    assert calls[0]["stdout"].name.endswith("page_web.log")
