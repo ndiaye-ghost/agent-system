@@ -193,3 +193,17 @@ def test_branding_colour_and_logo(tmp_path, monkeypatch):
     at = st_testing.AppTest.from_file(APP, default_timeout=60)
     at.run()
     assert not at.exception, at.exception
+
+
+def test_ico_logo_is_supported(tmp_path, monkeypatch):
+    from PIL import Image
+
+    logo = tmp_path / "logo.ico"
+    Image.new("RGBA", (64, 48), (204, 16, 20, 255)).save(logo, sizes=[(64, 48), (32, 24)])
+    monkeypatch.setenv("SAFETY_AGENT_LOGO", str(logo))
+    st_testing = pytest.importorskip("streamlit.testing.v1")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("SAFETY_AGENT_BASE_URL", "http://127.0.0.1:9/v1")
+    at = st_testing.AppTest.from_file(APP, default_timeout=60)
+    at.run()
+    assert not at.exception, at.exception

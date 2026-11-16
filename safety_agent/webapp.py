@@ -47,15 +47,28 @@ ACCENT = accent()
 LOGO = logo_path()
 
 
-def page_icon():
-    if LOGO and LOGO.suffix.lower() != ".svg":
-        try:
-            from PIL import Image
+def logo_image():
+    """The logo as an image object (handles .ico files); SVG files are passed as a path."""
+    if not LOGO:
+        return None
+    if LOGO.suffix.lower() == ".svg":
+        return str(LOGO)
+    try:
+        from PIL import Image
 
-            return Image.open(LOGO)
-        except Exception:  # unreadable image: keep the default icon
-            pass
-    return ":material/shield:"
+        im = Image.open(LOGO)
+        if im.format == "ICO":  # an .ico can hold several sizes: take the largest
+            im.size = max(im.info.get("sizes", [im.size]))
+        return im.convert("RGBA")
+    except Exception:  # unreadable image: no logo rather than a crash
+        return None
+
+
+LOGO_IMAGE = logo_image()
+
+
+def page_icon():
+    return LOGO_IMAGE if LOGO_IMAGE is not None and not isinstance(LOGO_IMAGE, str) else ":material/shield:"
 
 
 st.set_page_config(page_title=APP_NAME, page_icon=page_icon(), layout="wide",
@@ -121,7 +134,7 @@ h2, h3 { font-size: 1.1rem !important; font-weight: 600 !important; padding-top:
 
 /* sidebar */
 [data-testid="stSidebar"] { background: #ffffff; border-right: 1px solid #ececec; border-top: 4px solid __ACCENT__; }
-[data-testid="stSidebarHeader"] { padding: 0.6rem 0.8rem 0; height: 2.6rem; }
+[data-testid="stSidebarHeader"] { padding: 0.8rem 0.8rem 0.2rem; }
 [data-testid="stSidebarUserContent"] { padding-top: 0; }
 [data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 2px; }
 [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] { margin-bottom: 0 !important; }
@@ -138,7 +151,9 @@ h2, h3 { font-size: 1.1rem !important; font-weight: 600 !important; padding-top:
 [data-testid="stSidebar"] .st-key-nav_new button:hover { background: __ACCENT_DARK__; }
 [data-testid="stSidebar"] button p { font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sa-brand { font-weight: 700; font-size: 1.02rem; padding: 0 0.6rem 0.6rem; color: __ACCENT__; }
-[data-testid="stSidebarHeader"] img, [data-testid="stLogo"] { max-height: 3rem; }
+[data-testid="stSidebarHeader"] { height: auto !important; min-height: 4.6rem; align-items: flex-start; }
+[data-testid="stSidebarHeader"] img, [data-testid="stSidebarLogo"], [data-testid="stLogo"] {
+  height: 3.6rem !important; max-height: 3.6rem !important; width: auto !important; }
 .sa-section { font-size: 0.72rem; color: #8b8f97; text-transform: uppercase; letter-spacing: .05em;
               margin: 1rem 0 0.25rem 0.6rem; }
 .sa-status { font-size: 0.82rem; color: #57606a; padding: 0.1rem 0.6rem; }
@@ -332,8 +347,8 @@ def findings_table(findings, key: str) -> None:
 
 # ----------------------------------------------------------------------------- sidebar
 
-if LOGO:
-    st.logo(str(LOGO), size="large")
+if LOGO_IMAGE is not None:
+    st.logo(LOGO_IMAGE, size="large")
 with st.sidebar:
     st.markdown(f'<div class="sa-brand">{APP_NAME}</div>', unsafe_allow_html=True)
     st.button("Nouvelle conversation", icon=":material/edit_square:", on_click=new_conversation,

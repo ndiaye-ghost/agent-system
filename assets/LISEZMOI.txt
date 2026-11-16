@@ -1,4 +1,4 @@
-Déposez ici le logo de l'entreprise, nommé logo.png (ou logo.svg / logo.jpg).
+Déposez ici le logo de l'entreprise, nommé logo.png (ou logo.svg / logo.jpg / logo.ico).
 Il s'affiche en haut de la barre latérale et dans l'onglet du navigateur.
 Conseil : image horizontale, fond transparent ou blanc, environ 400 x 120 pixels.
 

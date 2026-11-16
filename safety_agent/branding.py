@@ -1,7 +1,7 @@
 """Company look: accent colour and logo.
 
 - Colour: change ACCENT_DEFAULT below, or set the SAFETY_AGENT_COULEUR variable (e.g. "#e2001a").
-- Logo: put the company logo in the project's assets/ folder as logo.png, logo.svg or logo.jpg,
+- Logo: put the company logo in the project's assets/ folder as logo.png, logo.svg, logo.jpg or logo.ico,
   or set SAFETY_AGENT_LOGO to the path of the file.
 """
 from __future__ import annotations
@@ -10,7 +10,7 @@ import os
 import re
 from pathlib import Path
 
-ACCENT_DEFAULT = "#c8102e"  # red; replace with the exact code from the company style guide
+ACCENT_DEFAULT = "#cc1014"  # EFI Automotive red, taken from the logo; replace if the style guide says otherwise
 ASSETS = Path(__file__).resolve().parent.parent / "assets"
 
 
@@ -30,7 +30,7 @@ def logo_path() -> Path | None:
     custom = os.getenv("SAFETY_AGENT_LOGO", "")
     if custom and Path(custom).is_file():
         return Path(custom)
-    for name in ("logo.png", "logo.svg", "logo.jpg", "logo.jpeg"):
+    for name in ("logo.png", "logo.svg", "logo.jpg", "logo.jpeg", "logo.ico"):
         if (ASSETS / name).is_file():
             return ASSETS / name
     return None
